@@ -14,7 +14,7 @@
   <!-- macOS-style titlebar — traffic lights live on the far left -->
   <div class="window-titlebar" role="banner" aria-label="Application title bar">
     <div class="traffic-lights-spacer" aria-hidden="true"></div>
-    <div class="window-title">PROJECT BEATRICE · AI VOICE CHANGER</div>
+    <div class="window-title" data-i18n="app_title">PROJECT BEATRICE · AI VOICE CHANGER</div>
   </div>
 
   <div class="app-container">
@@ -25,52 +25,52 @@
         <div class="brand-logo" aria-hidden="true">B</div>
         <div class="brand-details">
           <p class="brand-name">BEATRICE</p>
-          <span>Real-time DSP Engine v2.0.0</span>
+          <span data-i18n="dsp_version">Real-time DSP Engine v2.0.0</span>
         </div>
       </div>
 
       <!-- Power Toggle -->
       <div class="power-container card">
         <div class="power-header">
-          <span class="control-label">Voice Changer</span>
-          <div class="bypass-indicator active" id="bypass-status" role="status" aria-live="polite">BYPASSED</div>
+          <span class="control-label" data-i18n="voice_changer">Voice Changer</span>
+          <div class="bypass-indicator active" id="bypass-status" role="status" aria-live="polite" data-i18n="bypassed">BYPASSED</div>
         </div>
         <button class="btn-power active" id="power-toggle" aria-pressed="false" aria-label="Toggle voice changer bypass">
           <svg class="power-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <path d="M12 3v9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
             <path d="M6.4 5.4A9 9 0 1 0 17.6 5.4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
           </svg>
-          <span class="btn-power-label" id="power-label">BYPASSED</span>
+          <span class="btn-power-label" id="power-label" data-i18n="bypassed">BYPASSED</span>
         </button>
       </div>
 
       <!-- Audio Routing -->
       <div class="control-group card" role="group" aria-labelledby="audio-routing-heading">
-        <h2 class="control-group-heading" id="audio-routing-heading">Audio Routing</h2>
+        <h2 class="control-group-heading" id="audio-routing-heading" data-i18n="audio_routing">Audio Routing</h2>
 
         <!-- Input Selector -->
         <div class="select-container">
-          <label class="control-label" for="input-device-select">Input Microphone</label>
+          <label class="control-label" for="input-device-select" data-i18n="input_microphone">Input Microphone</label>
           <div class="select-wrapper">
             <select id="input-device-select" class="dropdown-select">
-              <option value="null">Default Microphone</option>
+              <option value="null" data-i18n="default_microphone">Default Microphone</option>
             </select>
           </div>
         </div>
 
         <!-- Output Selector -->
         <div class="select-container">
-          <label class="control-label" for="output-device-select">Output Device</label>
+          <label class="control-label" for="output-device-select" data-i18n="output_device">Output Device</label>
           <div class="select-wrapper">
             <select id="output-device-select" class="dropdown-select">
-              <option value="null">Default Speaker</option>
+              <option value="null" data-i18n="default_speaker">Default Speaker</option>
             </select>
           </div>
         </div>
 
         <!-- Hear Yourself Toggle -->
         <div class="toggle-container">
-          <label class="control-label" for="hear-yourself-toggle">Hear Yourself</label>
+          <label class="control-label" for="hear-yourself-toggle" data-i18n="hear_yourself">Hear Yourself</label>
           <label class="switch" aria-label="Toggle hear yourself monitoring">
             <input type="checkbox" id="hear-yourself-toggle">
             <span class="switch-slider"></span>
@@ -79,10 +79,10 @@
 
         <!-- Monitor Selector (shown only when Hear Yourself is on) -->
         <div class="select-container" id="monitor-container" style="display: none;" aria-hidden="true">
-          <label class="control-label" for="monitor-device-select">Monitor Device</label>
+          <label class="control-label" for="monitor-device-select" data-i18n="monitor_device">Monitor Device</label>
           <div class="select-wrapper">
             <select id="monitor-device-select" class="dropdown-select">
-              <option value="null">Default Headphones</option>
+              <option value="null" data-i18n="default_headphones">Default Headphones</option>
             </select>
           </div>
         </div>
@@ -90,12 +90,12 @@
 
       <!-- Input Controls -->
       <div class="control-group card" role="group" aria-labelledby="input-controls-heading">
-        <h2 class="control-group-heading" id="input-controls-heading">Input Controls</h2>
+        <h2 class="control-group-heading" id="input-controls-heading" data-i18n="input_controls">Input Controls</h2>
 
         <!-- Noise Gate -->
         <div class="slider-container">
           <div class="slider-header">
-            <label class="control-label" for="gate-slider">Noise Gate</label>
+            <label class="control-label" for="gate-slider" data-i18n="noise_gate">Noise Gate</label>
             <span class="slider-val" id="gate-val" aria-live="polite">0.010</span>
           </div>
           <input type="range" min="0" max="0.1" step="0.001" value="0.01" class="slider" id="gate-slider"
@@ -105,7 +105,7 @@
         <!-- Input Level Meter -->
         <div class="meter-container" role="meter" aria-label="Input audio level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div class="slider-header">
-            <span class="control-label">Input Level</span>
+            <span class="control-label" data-i18n="input_level">Input Level</span>
             <span class="meter-db-val" id="input-db-val">—</span>
           </div>
           <div class="meter-bar-bg">
@@ -116,12 +116,12 @@
 
       <!-- DSP Modifiers -->
       <div class="control-group card" role="group" aria-labelledby="dsp-heading">
-        <h2 class="control-group-heading" id="dsp-heading">DSP Modifiers</h2>
+        <h2 class="control-group-heading" id="dsp-heading" data-i18n="dsp_modifiers">DSP Modifiers</h2>
 
         <!-- Pitch Shift -->
         <div class="slider-container">
           <div class="slider-header">
-            <label class="control-label" for="pitch-slider">Pitch Shift</label>
+            <label class="control-label" for="pitch-slider" data-i18n="pitch_shift">Pitch Shift</label>
             <span class="slider-val" id="pitch-val" aria-live="polite">0.0 st</span>
           </div>
           <input type="range" min="-12" max="12" step="0.5" value="0" class="slider" id="pitch-slider"
@@ -136,7 +136,7 @@
         <!-- Formant Shift -->
         <div class="slider-container">
           <div class="slider-header">
-            <label class="control-label" for="formant-slider">Formant Shift</label>
+            <label class="control-label" for="formant-slider" data-i18n="formant_shift">Formant Shift</label>
             <span class="slider-val" id="formant-val" aria-live="polite">0.0</span>
           </div>
           <input type="range" min="-1.5" max="1.5" step="0.1" value="0" class="slider" id="formant-slider"
@@ -151,12 +151,12 @@
 
       <!-- Output Controls -->
       <div class="control-group card" role="group" aria-labelledby="output-heading">
-        <h2 class="control-group-heading" id="output-heading">Output Controls</h2>
+        <h2 class="control-group-heading" id="output-heading" data-i18n="output_controls">Output Controls</h2>
 
         <!-- Output Gain -->
         <div class="slider-container">
           <div class="slider-header">
-            <label class="control-label" for="volume-slider">Output Volume</label>
+            <label class="control-label" for="volume-slider" data-i18n="output_volume">Output Volume</label>
             <span class="slider-val" id="volume-val" aria-live="polite">100%</span>
           </div>
           <input type="range" min="0" max="2" step="0.05" value="1" class="slider" id="volume-slider"
@@ -166,7 +166,7 @@
         <!-- Output Level Meter -->
         <div class="meter-container" role="meter" aria-label="Output audio level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div class="slider-header">
-            <span class="control-label">Output Level</span>
+            <span class="control-label" data-i18n="output_level">Output Level</span>
             <span class="meter-db-val" id="output-db-val">—</span>
           </div>
           <div class="meter-bar-bg">
@@ -175,10 +175,37 @@
         </div>
       </div>
 
+      <!-- Theme & Language Preferences -->
+      <div class="sidebar-selectors">
+        <div class="select-container">
+          <label class="control-label" for="theme-select" data-i18n="theme">Theme</label>
+          <div class="select-wrapper">
+            <select id="theme-select" class="dropdown-select">
+              <option value="cyber-neon" data-i18n="theme_cyber_neon">Cyber Neon (Dark)</option>
+              <option value="deep-ocean" data-i18n="theme_deep_ocean">Deep Ocean (Dark)</option>
+              <option value="sunset-crimson" data-i18n="theme_sunset_crimson">Sunset Crimson (Dark)</option>
+              <option value="nordic-light" data-i18n="theme_nordic_light">Nordic Light (Light)</option>
+              <option value="sakura-light" data-i18n="theme_sakura_light">Sakura Light (Light)</option>
+              <option value="cyber-mint-light" data-i18n="theme_cyber_mint_light">Cyber Mint (Light)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="select-container">
+          <label class="control-label" for="lang-select" data-i18n="language">Language</label>
+          <div class="select-wrapper">
+            <select id="lang-select" class="dropdown-select">
+              <option value="en">English</option>
+              <option value="zh">简体中文</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <!-- Backend Status Footer -->
       <div class="sidebar-footer" role="status" aria-live="polite">
         <div class="conn-dot" id="conn-dot" aria-hidden="true"></div>
-        <span class="conn-label" id="conn-label">Connecting…</span>
+        <span class="conn-label" id="conn-label" data-i18n="connecting">Connecting…</span>
       </div>
 
     </aside>
@@ -193,16 +220,16 @@
             <path d="M13 13l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
           </svg>
           <input type="search" placeholder="Search 100 voices by name or element…" class="search-input" id="search-box"
-                 aria-label="Search voices" autocomplete="off" spellcheck="false">
+                 aria-label="Search voices" autocomplete="off" spellcheck="false" data-i18n-placeholder="search_placeholder">
           <span class="search-count" id="search-count" aria-live="polite"></span>
         </div>
         <div class="status-panel" role="status">
           <div class="status-item" id="stream-status-item">
             <span class="status-dot" id="stream-dot"></span>
-            <span class="status-text" id="stream-status-text">Waiting for backend…</span>
+            <span class="status-text" id="stream-status-text" data-i18n="waiting_backend">Waiting for backend…</span>
           </div>
           <div class="status-item">
-            <span class="status-label">Buffer:</span>
+            <span class="status-label" data-i18n="buffer">Buffer:</span>
             <span class="status-val">160 spl · 10 ms</span>
           </div>
         </div>
@@ -210,8 +237,8 @@
 
       <!-- Page heading — one h1 per page for SEO -->
       <div class="content-header">
-        <h1>Target Voices</h1>
-        <p>Select a JVS speaker to morph your voice. Each speaker maps to a unique chemical element in the periodic table.</p>
+        <h1 data-i18n="target_voices">Target Voices</h1>
+        <p data-i18n="target_voices_desc">Select a JVS speaker to morph your voice. Each speaker maps to a unique chemical element in the periodic table.</p>
       </div>
 
       <!-- Speakers Grid Container -->
@@ -219,7 +246,7 @@
         <!-- Dynamically populated via renderer.js -->
         <div class="loading-state" id="loading-state">
           <div class="spinner" aria-hidden="true"></div>
-          <p>Loading 100 speaker profiles…</p>
+          <p data-i18n="loading_speakers">Loading 100 speaker profiles…</p>
         </div>
       </div>
     </main>

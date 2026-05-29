@@ -1,7 +1,145 @@
 'use strict';
 
-const fs   = require('fs');
+const fs   = require('path'); // We'll keep fs and path imports clean
+const fsModule = require('fs');
 const path = require('path');
+
+// ── i18n Dictionary ──────────────────────────────────────────────────────────
+const TRANSLATIONS = {
+  en: {
+    app_title: "PROJECT BEATRICE · AI VOICE CHANGER",
+    dsp_version: "Real-time DSP Engine v2.0.0",
+    voice_changer: "Voice Changer",
+    bypassed: "BYPASSED",
+    live: "LIVE",
+    audio_routing: "Audio Routing",
+    input_microphone: "Input Microphone",
+    default_microphone: "Default Microphone",
+    output_device: "Output Device",
+    default_speaker: "Default Speaker",
+    hear_yourself: "Hear Yourself",
+    monitor_device: "Monitor Device",
+    default_headphones: "Default Headphones",
+    input_controls: "Input Controls",
+    noise_gate: "Noise Gate",
+    input_level: "Input Level",
+    dsp_modifiers: "DSP Modifiers",
+    pitch_shift: "Pitch Shift",
+    formant_shift: "Formant Shift",
+    output_controls: "Output Controls",
+    output_volume: "Output Volume",
+    output_level: "Output Level",
+    theme: "Theme",
+    language: "Language",
+    theme_cyber_neon: "Cyber Neon (Dark)",
+    theme_deep_ocean: "Deep Ocean (Dark)",
+    theme_sunset_crimson: "Sunset Crimson (Dark)",
+    theme_nordic_light: "Nordic Light (Light)",
+    theme_sakura_light: "Sakura Light (Light)",
+    theme_cyber_mint_light: "Cyber Mint (Light)",
+    connecting: "Connecting…",
+    backend_connected: "Backend connected",
+    backend_offline: "Backend offline",
+    stream_active: "Audio Stream Active",
+    waiting_backend: "Waiting for backend…",
+    buffer: "Buffer:",
+    target_voices: "Target Voices",
+    target_voices_desc: "Select a JVS speaker to morph your voice. Each speaker maps to a unique chemical element in the periodic table.",
+    loading_speakers: "Loading 100 speaker profiles…",
+    search_placeholder: "Search 100 voices by name or element…",
+    voices_count: "{shown} / {total} voices",
+    all_voices_count: "{total} voices",
+    empty_voices: "No voices match your search.",
+    empty_voices_sub: "Try a different name or element.",
+    model_config_error: "Model config file not found. Please check beatrice_paraphernalia_jvs/",
+    no_speakers_found: "No speaker profiles found in TOML config.",
+    failed_load_speakers: "Failed to load speakers: {err}"
+  },
+  zh: {
+    app_title: "BEATRICE 项目 · AI 变声器",
+    dsp_version: "实时 DSP 引擎 v2.0.0",
+    voice_changer: "变声器开关",
+    bypassed: "已旁路",
+    live: "工作模式",
+    audio_routing: "音频路由",
+    input_microphone: "输入麦克风",
+    default_microphone: "默认麦克风",
+    output_device: "输出设备",
+    default_speaker: "默认扬声器",
+    hear_yourself: "耳返监听",
+    monitor_device: "耳返设备",
+    default_headphones: "默认耳机",
+    input_controls: "输入控制",
+    noise_gate: "降噪门限",
+    input_level: "输入电平",
+    dsp_modifiers: "DSP 调节",
+    pitch_shift: "音高偏差",
+    formant_shift: "共振峰偏差",
+    output_controls: "输出控制",
+    output_volume: "输出音量",
+    output_level: "输出电平",
+    theme: "界面主题",
+    language: "界面语言",
+    theme_cyber_neon: "赛博霓虹 (深色)",
+    theme_deep_ocean: "深海翡翠 (深色)",
+    theme_sunset_crimson: "暮色红莲 (深色)",
+    theme_nordic_light: "极简北欧 (浅色)",
+    theme_sakura_light: "粉黛樱花 (浅色)",
+    theme_cyber_mint_light: "薄荷冰晶 (浅色)",
+    connecting: "正在连接后端...",
+    backend_connected: "后端已连接",
+    backend_offline: "后端未启动",
+    stream_active: "音频流传输中",
+    waiting_backend: "等待变声引擎...",
+    buffer: "缓冲区:",
+    target_voices: "变声音色列表",
+    target_voices_desc: "选择一个 JVS 说话人来改变您的声音。每个说话人均对应元素周期表中的一个独特化学元素。",
+    loading_speakers: "正在加载 100 位说话人配置...",
+    search_placeholder: "通过姓名或化学元素搜索 100 种音色...",
+    voices_count: "找到 {shown} / {total} 种音色",
+    all_voices_count: "共 {total} 种音色",
+    empty_voices: "没有找到符合搜索条件的音色。",
+    empty_voices_sub: "请尝试使用其他姓名或化学元素进行检索。",
+    model_config_error: "未找到模型配置文件。请检查 beatrice_paraphernalia_jvs/ 目录是否存在。",
+    no_speakers_found: "未在 TOML 配置中找到说话人配置文件。",
+    failed_load_speakers: "加载音色失败: {err}"
+  }
+};
+
+let currentLanguage = 'zh'; // Default to Chinese
+
+function t(key, replaces = {}) {
+  let text = (TRANSLATIONS[currentLanguage] && TRANSLATIONS[currentLanguage][key]) || TRANSLATIONS['en'][key] || key;
+  for (const [k, v] of Object.entries(replaces)) {
+    text = text.replaceAll(`{${k}}`, v);
+  }
+  return text;
+}
+
+function applyLanguage(lang) {
+  currentLanguage = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    el.textContent = t(key);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    el.setAttribute('placeholder', t(key));
+  });
+
+  // Re-sync dynamic elements text
+  applyBypassUI(voiceChangerBypass);
+  if (speakerProfiles.length > 0) {
+    const query = searchBox.value.toLowerCase().trim();
+    if (query) {
+      const filteredCount = speakersGrid.querySelectorAll('.speaker-card').length;
+      updateSearchCount(filteredCount, speakerProfiles.length);
+    } else {
+      updateSearchCount(speakerProfiles.length, speakerProfiles.length);
+    }
+  }
+  setBackendStatus(backendOnline);
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let speakerProfiles    = [];
@@ -47,20 +185,23 @@ const connLabel            = document.getElementById('conn-label');
 const streamDot            = document.getElementById('stream-dot');
 const streamStatusText     = document.getElementById('stream-status-text');
 
+const themeSelect          = document.getElementById('theme-select');
+const langSelect           = document.getElementById('lang-select');
+
 // ── TOML Speaker Loader ───────────────────────────────────────────────────────
 
 function loadSpeakerData() {
   try {
     const tomlPath = path.join(__dirname, 'beatrice_paraphernalia_jvs', 'beatrice_paraphernalia_jvs.toml');
-    if (!fs.existsSync(tomlPath)) {
-      showSpeakerError('Model config file not found. Please check beatrice_paraphernalia_jvs/');
+    if (!fsModule.existsSync(tomlPath)) {
+      showSpeakerError(t('model_config_error'));
       return;
     }
-    const tomlText = fs.readFileSync(tomlPath, 'utf8');
+    const tomlText = fsModule.readFileSync(tomlPath, 'utf8');
     speakerProfiles = parseTOML(tomlText);
 
     if (speakerProfiles.length === 0) {
-      showSpeakerError('No speaker profiles found in TOML config.');
+      showSpeakerError(t('no_speakers_found'));
       return;
     }
 
@@ -68,7 +209,7 @@ function loadSpeakerData() {
     updateSearchCount(speakerProfiles.length, speakerProfiles.length);
   } catch (err) {
     console.error('[Beatrice] Error loading speaker config:', err);
-    showSpeakerError(`Failed to load speakers: ${err.message}`);
+    showSpeakerError(t('failed_load_speakers', { err: err.message }));
   }
 }
 
@@ -166,8 +307,8 @@ function renderSpeakers(profiles) {
     speakersGrid.innerHTML = `
       <div class="empty-state" role="status">
         <div class="empty-state-icon" aria-hidden="true">🔍</div>
-        <p>No voices match your search.</p>
-        <small>Try a different name or element.</small>
+        <p>${t('empty_voices')}</p>
+        <small>${t('empty_voices_sub')}</small>
       </div>`;
     return;
   }
@@ -191,10 +332,12 @@ function renderSpeakers(profiles) {
     card.setAttribute('tabindex', '0');
     card.style.animationDelay = `${Math.min(i * 18, 600)}ms`;
 
+    const isDefaultTag = elemStr === 'JVS Voice';
+
     // Inline colour from element hue
     card.innerHTML = `
       <div class="speaker-elem-tag"
-           style="--elem-hue:${hue};background:hsl(${hue},70%,50%,0.14);color:hsl(${hue},85%,72%);border-color:hsl(${hue},70%,60%,0.22);"
+           ${isDefaultTag ? '' : `style="--elem-hue:${hue};"`}
            aria-hidden="true">${elemStr}</div>
       <div class="speaker-id">${jvsId}</div>
       <div class="speaker-name">${speaker.name}</div>
@@ -277,14 +420,14 @@ function applyBypassUI(bypass) {
     powerToggleBtn.classList.add('active');        // red glow = bypassed
     powerToggleBtn.setAttribute('aria-pressed', 'false');
     bypassStatusEl.className  = 'bypass-indicator active';
-    bypassStatusEl.textContent = 'BYPASSED';
-    powerLabelEl.textContent  = 'BYPASSED';
+    bypassStatusEl.textContent = t('bypassed');
+    powerLabelEl.textContent  = t('bypassed');
   } else {
     powerToggleBtn.classList.remove('active');     // no glow = live processing
     powerToggleBtn.setAttribute('aria-pressed', 'true');
     bypassStatusEl.className  = 'bypass-indicator live';
-    bypassStatusEl.textContent = 'LIVE';
-    powerLabelEl.textContent  = 'LIVE';
+    bypassStatusEl.textContent = t('live');
+    powerLabelEl.textContent  = t('live');
   }
 }
 
@@ -347,9 +490,9 @@ searchBox.addEventListener('input', () => {
 
 function updateSearchCount(shown, total) {
   if (shown === total) {
-    searchCount.textContent = `${total} voices`;
+    searchCount.textContent = t('all_voices_count', { total });
   } else {
-    searchCount.textContent = `${shown} / ${total}`;
+    searchCount.textContent = t('voices_count', { shown, total });
   }
 }
 
@@ -364,9 +507,9 @@ async function loadAudioDevices() {
     const prevOut = outputDeviceSelect.value;
     const prevMon = monitorDeviceSelect.value;
 
-    inputDeviceSelect.innerHTML   = '<option value="null">Default Microphone</option>';
-    outputDeviceSelect.innerHTML  = '<option value="null">Default Speaker</option>';
-    monitorDeviceSelect.innerHTML = '<option value="null">Default Monitor</option>';
+    inputDeviceSelect.innerHTML   = `<option value="null">${t('default_microphone')}</option>`;
+    outputDeviceSelect.innerHTML  = `<option value="null">${t('default_speaker')}</option>`;
+    monitorDeviceSelect.innerHTML = `<option value="null">${t('default_headphones')}</option>`;
 
     devices.forEach(dev => {
       const makeOpt = () => {
@@ -425,19 +568,18 @@ function linearToDb(linear) {
 }
 
 function setBackendStatus(online) {
-  if (online === backendOnline) return;
   backendOnline = online;
 
   if (online) {
     connDot.className = 'conn-dot connected';
-    connLabel.textContent = 'Backend connected';
+    connLabel.textContent = t('backend_connected');
     streamDot.className  = 'status-dot live';
-    streamStatusText.textContent = 'Audio Stream Active';
+    streamStatusText.textContent = t('stream_active');
   } else {
     connDot.className = 'conn-dot error';
-    connLabel.textContent = 'Backend offline';
+    connLabel.textContent = t('backend_offline');
     streamDot.className  = 'status-dot error';
-    streamStatusText.textContent = 'Backend Offline';
+    streamStatusText.textContent = t('backend_offline');
     inputMeterFill.style.width  = '0%';
     outputMeterFill.style.width = '0%';
     inputDbVal.textContent  = '—';
@@ -488,6 +630,29 @@ async function pollBackendStatus() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
+
+// Load user preferences for Theme & Language
+let savedTheme = localStorage.getItem('beatrice-theme') || 'cyber-neon';
+let savedLang  = localStorage.getItem('beatrice-lang') || 'zh'; // Default to Chinese
+
+document.body.setAttribute('data-theme', savedTheme);
+themeSelect.value = savedTheme;
+
+langSelect.value = savedLang;
+applyLanguage(savedLang);
+
+themeSelect.addEventListener('change', () => {
+  const theme = themeSelect.value;
+  document.body.setAttribute('data-theme', theme);
+  localStorage.setItem('beatrice-theme', theme);
+});
+
+langSelect.addEventListener('change', () => {
+  const lang = langSelect.value;
+  localStorage.setItem('beatrice-lang', lang);
+  applyLanguage(lang);
+});
+
 loadSpeakerData();
 applyBypassUI(voiceChangerBypass);   // initialise UI to correct state
 setInterval(pollBackendStatus, 100);

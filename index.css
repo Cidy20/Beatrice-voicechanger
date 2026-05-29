@@ -38,7 +38,263 @@
   --ease-smooth: all 0.28s cubic-bezier(0.25, 0.8, 0.25, 1);
   --ease-fast:   all 0.14s ease;
   --ease-spring: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Custom */
+  --bg-dropdown-option: #0d0d20;
+  --slider-thumb-bg: #ffffff;
+  --switch-thumb-bg: #cbd5e1;
+
+  /* Tag Color Adaptability */
+  --tag-hue-default: 270; /* Violet fallback */
+  --tag-bg-l: 50%;
+  --tag-bg-opacity: 0.14;
+  --tag-text-l: 72%;
+  --tag-border-l: 60%;
+  --tag-border-opacity: 0.22;
 }
+
+/* ── Theme 2: Deep Ocean (Dark) ────────────────────────── */
+body[data-theme="deep-ocean"] {
+  --bg-main:    radial-gradient(ellipse at 80% 0%, #03141a 0%, #010609 60%);
+  --bg-sidebar: rgba(2, 10, 14, 0.76);
+  --bg-card:    rgba(4, 20, 26, 0.62);
+  --bg-card-hov: rgba(6, 28, 36, 0.80);
+
+  --border-subtle:  rgba(255, 255, 255, 0.05);
+  --border-hover:   rgba(52, 211, 153, 0.25);
+  --border-active:  rgba(52, 211, 153, 0.50);
+
+  --cyan:         hsl(150, 90%, 45%); /* Emerald Green */
+  --cyan-dim:     hsla(150, 90%, 45%, 0.18);
+  --cyan-glow:    hsla(150, 90%, 45%, 0.35);
+  --purple:       hsl(190, 95%, 48%); /* Marine Teal */
+  --purple-dim:   hsla(190, 95%, 48%, 0.18);
+  --purple-glow:  hsla(190, 95%, 48%, 0.35);
+
+  --text-hi:    #f0f8f5;
+  --text-mid:   #8ea8a2;
+  --text-lo:    #4e6b65;
+  --bg-dropdown-option: #061c24;
+  --slider-thumb-bg: #ffffff;
+  --switch-thumb-bg: #8ea8a2;
+
+  /* Tag Color Adaptability */
+  --tag-hue-default: 190; /* Marine Teal default */
+  --tag-bg-l: 50%;
+  --tag-bg-opacity: 0.14;
+  --tag-text-l: 72%;
+  --tag-border-l: 60%;
+  --tag-border-opacity: 0.22;
+}
+
+/* ── Theme 3: Sunset Crimson (Dark) ────────────────────── */
+body[data-theme="sunset-crimson"] {
+  --bg-main:    radial-gradient(ellipse at 80% 0%, #1a0a0d 0%, #090304 60%);
+  --bg-sidebar: rgba(14, 6, 8, 0.76);
+  --bg-card:    rgba(26, 12, 14, 0.62);
+  --bg-card-hov: rgba(36, 16, 20, 0.80);
+
+  --border-subtle:  rgba(255, 255, 255, 0.05);
+  --border-hover:   rgba(244, 63, 94, 0.25);
+  --border-active:  rgba(244, 63, 94, 0.50);
+
+  --cyan:         hsl(14, 100%, 55%); /* Sunset Orange */
+  --cyan-dim:     hsla(14, 100%, 55%, 0.18);
+  --cyan-glow:    hsla(14, 100%, 55%, 0.35);
+  --purple:       hsl(345, 96%, 55%); /* Coral Red */
+  --purple-dim:   hsla(345, 96%, 55%, 0.18);
+  --purple-glow:  hsla(345, 96%, 55%, 0.35);
+
+  --text-hi:    #fff0f1;
+  --text-mid:   #a88e90;
+  --text-lo:    #6b4e50;
+  --bg-dropdown-option: #220f12;
+  --slider-thumb-bg: #ffffff;
+  --switch-thumb-bg: #a88e90;
+
+  /* Tag Color Adaptability */
+  --tag-hue-default: 345; /* Coral Red default */
+  --tag-bg-l: 50%;
+  --tag-bg-opacity: 0.14;
+  --tag-text-l: 72%;
+  --tag-border-l: 60%;
+  --tag-border-opacity: 0.22;
+}
+
+/* ── Theme 4: Nordic Light (Light) ─────────────────────── */
+body[data-theme="nordic-light"] {
+  --bg-main:    radial-gradient(ellipse at 80% 0%, #edf1f7 0%, #d4dde9 70%);
+  --bg-sidebar: rgba(255, 255, 255, 0.82);
+  --bg-card:    rgba(241, 245, 249, 0.90);
+  --bg-card-hov: #ffffff;
+
+  --border-subtle:  rgba(0, 0, 0, 0.05);
+  --border-hover:   rgba(14, 116, 144, 0.22);
+  --border-active:  rgba(14, 116, 144, 0.45);
+
+  --cyan:         hsl(200, 95%, 45%); /* Lake Blue */
+  --cyan-dim:     hsla(200, 95%, 45%, 0.12);
+  --cyan-glow:    hsla(200, 95%, 45%, 0.20);
+  --purple:       hsl(255, 80%, 58%); /* Royal Violet */
+  --purple-dim:   hsla(255, 80%, 58%, 0.10);
+  --purple-glow:  hsla(255, 80%, 58%, 0.18);
+
+  --text-hi:    #1e2e4a; /* Deep Nordic Slate Blue */
+  --text-mid:   #5b708b;
+  --text-lo:    #8ba0be;
+
+  --green:      hsl(142, 70%, 35%);
+  --green-dim:  hsla(142, 70%, 35%, 0.12);
+  --red:        hsl(350, 80%, 50%);
+  --red-dim:    hsla(350, 80%, 50%, 0.12);
+  --bg-dropdown-option: #ffffff;
+  --slider-thumb-bg: var(--cyan); /* Match with checkbox circle */
+  --switch-thumb-bg: #ffffff;
+
+  /* Tag Color Adaptability - Darker text on light card background */
+  --tag-hue-default: 200; /* Match lake blue */
+  --tag-bg-l: 45%;
+  --tag-bg-opacity: 0.08;
+  --tag-text-l: 32%;
+  --tag-border-l: 45%;
+  --tag-border-opacity: 0.18;
+}
+
+/* ── Theme 5: Sakura Light (Light) ─────────────────────── */
+body[data-theme="sakura-light"] {
+  --bg-main:    radial-gradient(ellipse at 80% 0%, #fbe8ec 0%, #ecd0d6 70%);
+  --bg-sidebar: rgba(255, 255, 255, 0.82);
+  --bg-card:    rgba(255, 243, 246, 0.90);
+  --bg-card-hov: #ffffff;
+
+  --border-subtle:  rgba(0, 0, 0, 0.05);
+  --border-hover:   rgba(219, 39, 119, 0.20);
+  --border-active:  rgba(219, 39, 119, 0.45);
+
+  --cyan:         hsl(330, 95%, 55%); /* Sakura Pink */
+  --cyan-dim:     hsla(330, 95%, 55%, 0.12);
+  --cyan-glow:    hsla(330, 95%, 55%, 0.22);
+  --purple:       hsl(280, 85%, 58%); /* Iris Purple */
+  --purple-dim:   hsla(280, 85%, 58%, 0.10);
+  --purple-glow:  hsla(280, 85%, 58%, 0.18);
+
+  --text-hi:    #66152a; /* Rich Cherry Red Black */
+  --text-mid:   #785964;
+  --text-lo:    #ad8995;
+
+  --green:      hsl(142, 70%, 35%);
+  --green-dim:  hsla(142, 70%, 35%, 0.12);
+  --red:        hsl(350, 80%, 50%);
+  --red-dim:    hsla(350, 80%, 50%, 0.12);
+  --bg-dropdown-option: #ffffff;
+  --slider-thumb-bg: var(--cyan); /* Match with checkbox circle */
+  --switch-thumb-bg: #ffffff;
+
+  /* Tag Color Adaptability */
+  --tag-hue-default: 330; /* Match sakura pink */
+  --tag-bg-l: 45%;
+  --tag-bg-opacity: 0.08;
+  --tag-text-l: 32%;
+  --tag-border-l: 45%;
+  --tag-border-opacity: 0.18;
+}
+
+/* ── Theme 6: Cyber Mint (Light) ───────────────────────── */
+body[data-theme="cyber-mint-light"] {
+  --bg-main:    radial-gradient(ellipse at 80% 0%, #e8f5ef 0%, #caded5 70%);
+  --bg-sidebar: rgba(255, 255, 255, 0.82);
+  --bg-card:    rgba(240, 251, 246, 0.90);
+  --bg-card-hov: #ffffff;
+
+  --border-subtle:  rgba(0, 0, 0, 0.05);
+  --border-hover:   rgba(5, 150, 105, 0.20);
+  --border-active:  rgba(5, 150, 105, 0.45);
+
+  --cyan:         hsl(155, 85%, 38%); /* Mint Green */
+  --cyan-dim:     hsla(155, 85%, 38%, 0.12);
+  --cyan-glow:    hsla(155, 85%, 38%, 0.22);
+  --purple:       hsl(190, 90%, 40%); /* Ice Blue */
+  --purple-dim:   hsla(190, 90%, 40%, 0.10);
+  --purple-glow:  hsla(190, 90%, 40%, 0.18);
+
+  --text-hi:    #034a30; /* Rich Forest Emerald Green */
+  --text-mid:   #44725f;
+  --text-lo:    #82a898;
+
+  --green:      hsl(142, 70%, 35%);
+  --green-dim:  hsla(142, 70%, 35%, 0.12);
+  --red:        hsl(350, 80%, 50%);
+  --red-dim:    hsla(350, 80%, 50%, 0.12);
+  --bg-dropdown-option: #ffffff;
+  --slider-thumb-bg: var(--cyan); /* Match with checkbox circle */
+  --switch-thumb-bg: #ffffff;
+
+  /* Tag Color Adaptability */
+  --tag-hue-default: 155; /* Match mint green */
+  --tag-bg-l: 45%;
+  --tag-bg-opacity: 0.08;
+  --tag-text-l: 32%;
+  --tag-border-l: 45%;
+  --tag-border-opacity: 0.18;
+}
+
+/* ── Light Mode Polish ─────────────────────────────────── */
+body[data-theme*="light"] .btn-power:not(.active),
+body[data-theme*="light"] .dropdown-select,
+body[data-theme*="light"] .search-container,
+body[data-theme*="light"] .status-item {
+  background: rgba(0, 0, 0, 0.035);
+}
+
+body[data-theme*="light"] .sidebar {
+  background: rgba(246, 248, 251, 0.85); /* 稍微偏灰白，带更强的磨砂质感 */
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+body[data-theme*="light"] .dropdown-select option {
+  background: var(--bg-dropdown-option);
+  color: var(--text-hi);
+}
+
+body[data-theme*="light"] .card {
+  background: var(--bg-card);
+  border: 1px solid rgba(0, 0, 0, 0.045);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.015);
+}
+
+body[data-theme*="light"] .card:hover {
+  background: var(--bg-card-hov);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07), 0 2px 6px rgba(0, 0, 0, 0.025);
+}
+
+body[data-theme*="light"] .speaker-card.active {
+  box-shadow: 0 0 0 1px var(--cyan), 0 4px 20px var(--cyan-glow), 0 8px 24px rgba(0, 0, 0, 0.05);
+}
+
+body[data-theme*="light"] .brand-logo {
+  box-shadow: 0 0 14px var(--cyan-glow), 0 2px 6px rgba(0,0,0,0.1);
+  color: #ffffff;
+}
+
+body[data-theme*="light"] .btn-power.active {
+  color: #ffffff;
+}
+
+/* ── Slider & Switch Light Polish ──────────────────────── */
+body[data-theme*="light"] .slider {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+body[data-theme*="light"] .slider::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.03), 0 2px 5px rgba(0, 0, 0, 0.12);
+}
+
+body[data-theme*="light"] .switch-slider {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+
 
 /* ── Reset & Base ──────────────────────────────────────── */
 *, *::before, *::after {
@@ -323,7 +579,7 @@ body {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: var(--text-hi);
+  background: var(--slider-thumb-bg, var(--text-hi));
   cursor: pointer;
   box-shadow: 0 0 0 2px rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.6);
   transition: var(--ease-spring);
@@ -436,7 +692,7 @@ body {
 }
 
 .dropdown-select option {
-  background: #0d0d20;
+  background: var(--bg-dropdown-option, #0d0d20);
   color: var(--text-hi);
 }
 
@@ -478,7 +734,7 @@ body {
   height: 15px;
   left: 3px;
   bottom: 3px;
-  background: var(--text-mid);
+  background: var(--switch-thumb-bg, var(--text-mid));
   border-radius: 50%;
   transition: 0.28s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
@@ -500,14 +756,27 @@ body {
   outline-offset: 2px;
 }
 
+/* ── Sidebar Selectors ─────────────────────────────────── */
+.sidebar-selectors {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar-selectors .select-container {
+  gap: 5px;
+}
+
 /* ── Sidebar Footer / Backend Status ───────────────────── */
 .sidebar-footer {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: auto;
+  margin-top: 4px;
   padding-top: 8px;
-  border-top: 1px solid var(--border-subtle);
 }
 
 .conn-dot {
@@ -746,9 +1015,12 @@ body {
   padding: 2px 8px;
   border-radius: 20px;
   margin-bottom: 10px;
-  background: var(--purple-dim);
-  color: var(--purple);
-  border: 1px solid rgba(180,120,255,0.18);
+  
+  /* 优先使用基于 HUE 的自适应主题配色，后备使用原本的紫罗兰配色 */
+  background: hsla(var(--elem-hue, var(--tag-hue-default, 270)), 70%, var(--tag-bg-l, 50%), var(--tag-bg-opacity, 0.14));
+  color: hsl(var(--elem-hue, var(--tag-hue-default, 270)), 85%, var(--tag-text-l, 72%));
+  border: 1px solid hsla(var(--elem-hue, var(--tag-hue-default, 270)), 70%, var(--tag-border-l, 60%), var(--tag-border-opacity, 0.22));
+  
   transition: var(--ease-fast);
   max-width: 100%;
   overflow: hidden;
@@ -759,7 +1031,8 @@ body {
 .speaker-card.active .speaker-elem-tag {
   background: var(--cyan-dim);
   color: var(--cyan);
-  border-color: rgba(0,230,255,0.25);
+  border-color: var(--border-active);
+  box-shadow: 0 0 4px hsla(var(--elem-hue, var(--tag-hue-default, 270)), 70%, var(--tag-border-l, 60%), 0.15);
 }
 
 .speaker-id {
