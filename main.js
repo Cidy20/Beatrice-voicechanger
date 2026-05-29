@@ -1,8 +1,8 @@
-'use strict';
-
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const { spawn }              = require('child_process');
 const path                   = require('path');
+
+process.env.APP_ROOT = app.getAppPath();
 
 let mainWindow    = null;
 let pythonProcess = null;
@@ -39,6 +39,18 @@ function createWindow() {
   });
 }
 
+ipcMain.handle('select-model-source', async () => {
+  if (!mainWindow) return { canceled: true, filePaths: [] };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择音色模型 (.zip 压缩包或整个模型文件夹)',
+    properties: ['openFile', 'openDirectory'],
+    filters: [
+      { name: 'Beatrice Models', extensions: ['zip'] }
+    ]
+  });
+  return result;
+});
+
 function startBackend() {
   const scriptPath = path.join(__dirname, 'beatrice_audio.py');
   console.log('[Beatrice] Spawning Python audio backend:', scriptPath);
@@ -73,8 +85,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  // On macOS it is conventional to keep the process running
-  if (process.platform !== 'darwin') app.quit();
+  app.quit();
 });
 
 app.on('will-quit', () => {

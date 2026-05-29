@@ -47,6 +47,7 @@ monitor_queue = queue.Queue(maxsize=50)
 monitor_stream = None
 stream = None
 stream_lock = threading.Lock()
+dsp_lock = threading.Lock()
 
 def cleanup_and_exit(signum=None, frame=None):
     global stream, monitor_stream
@@ -347,6 +348,10 @@ class ControlHandler(BaseHTTPRequestHandler):
                     Config.hear_yourself = new_hy
                     needs_stream_restart = True
                     
+            if 'model_dir' in query:
+                new_model_dir = query['model_dir'][0]
+                threading.Thread(target=load_beatrice_models, args=(new_model_dir,), daemon=True).start()
+
             if needs_stream_restart:
                 threading.Thread(target=restart_audio_streams, daemon=True).start()
                 
@@ -443,54 +448,110 @@ lib.Beatrice20rc0_EstimatePitch1.restype = None
 lib.Beatrice20rc0_GenerateWaveform1.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float), ctypes.c_void_p]
 lib.Beatrice20rc0_GenerateWaveform1.restype = None
 
-# Load weights and contexts
-paraphernalia_dir = os.path.join(_BASE_DIR, "beatrice_paraphernalia_jvs")
-phone_bin = f"{paraphernalia_dir}/phone_extractor.bin".encode()
-pitch_bin = f"{paraphernalia_dir}/pitch_estimator.bin".encode()
-waveform_bin = f"{paraphernalia_dir}/waveform_generator.bin".encode()
-embedding_bin = f"{paraphernalia_dir}/embedding_setter.bin".encode()
-speaker_bin = f"{paraphernalia_dir}/speaker_embeddings.bin".encode()
+dsp_lock = threading.Lock()
 
-print("[*] Initializing Beatrice DSP models...")
-phone_extractor = lib.Beatrice20rc0_CreatePhoneExtractor()
-lib.Beatrice20rc0_ReadPhoneExtractorParameters(phone_extractor, phone_bin)
-phone_context = lib.Beatrice20rc0_CreatePhoneContext1()
+# Global pointers for hot-reloading
+phone_extractor = None
+phone_context = None
+pitch_estimator = None
+pitch_context = None
+waveform_generator = None
+waveform_context = None
+embedding_setter = None
+embedding_context = None
 
-pitch_estimator = lib.Beatrice20rc0_CreatePitchEstimator()
-lib.Beatrice20rc0_ReadPitchEstimatorParameters(pitch_estimator, pitch_bin)
-pitch_context = lib.Beatrice20rc0_CreatePitchContext1()
+codebooks = None
+additive_embeddings = None
+formant_shift_embeddings = None
+kv_embeddings = None
+n_speakers = 101
 
-waveform_generator = lib.Beatrice20rc0_CreateWaveformGenerator()
-lib.Beatrice20rc0_ReadWaveformGeneratorParameters(waveform_generator, waveform_bin)
-waveform_context = lib.Beatrice20rc0_CreateWaveformContext1()
+def load_beatrice_models(model_dir):
+    global phone_extractor, phone_context, pitch_estimator, pitch_context, waveform_generator, waveform_context, embedding_setter, embedding_context
+    global codebooks, additive_embeddings, formant_shift_embeddings, kv_embeddings, n_speakers
+    
+    with dsp_lock:
+        print(f"[*] Hot-reloading Beatrice models from: {model_dir}")
+        Config.dsp_ready = False
+        
+        # 1. Clean up old resources if they exist
+        try:
+            if phone_context:
+                lib.Beatrice20rc0_DestroyPhoneContext1(phone_context)
+            if phone_extractor:
+                lib.Beatrice20rc0_DestroyPhoneExtractor(phone_extractor)
+            if pitch_context:
+                lib.Beatrice20rc0_DestroyPitchContext1(pitch_context)
+            if pitch_estimator:
+                lib.Beatrice20rc0_DestroyPitchEstimator(pitch_estimator)
+            if waveform_context:
+                lib.Beatrice20rc0_DestroyWaveformContext1(waveform_context)
+            if waveform_generator:
+                lib.Beatrice20rc0_DestroyWaveformGenerator(waveform_generator)
+            if embedding_context:
+                lib.Beatrice20rc0_DestroyEmbeddingContext(embedding_context)
+            if embedding_setter:
+                lib.Beatrice20rc0_DestroyEmbeddingSetter(embedding_setter)
+        except Exception as ex:
+            print("[-] Exception cleaning up old models:", ex)
 
-embedding_setter = lib.Beatrice20rc0_CreateEmbeddingSetter()
-lib.Beatrice20rc0_ReadEmbeddingSetterParameters(embedding_setter, embedding_bin)
+        # 2. Reload new model files
+        paraphernalia_dir = os.path.join(_BASE_DIR, model_dir)
+        phone_bin = f"{paraphernalia_dir}/phone_extractor.bin".encode()
+        pitch_bin = f"{paraphernalia_dir}/pitch_estimator.bin".encode()
+        waveform_bin = f"{paraphernalia_dir}/waveform_generator.bin".encode()
+        embedding_bin = f"{paraphernalia_dir}/embedding_setter.bin".encode()
+        speaker_bin = f"{paraphernalia_dir}/speaker_embeddings.bin".encode()
+        
+        if not os.path.exists(phone_bin):
+            print(f"[-] Missing binary in model folder: {phone_bin}")
+            return
+            
+        try:
+            phone_extractor = lib.Beatrice20rc0_CreatePhoneExtractor()
+            lib.Beatrice20rc0_ReadPhoneExtractorParameters(phone_extractor, phone_bin)
+            phone_context = lib.Beatrice20rc0_CreatePhoneContext1()
+            
+            pitch_estimator = lib.Beatrice20rc0_CreatePitchEstimator()
+            lib.Beatrice20rc0_ReadPitchEstimatorParameters(pitch_estimator, pitch_bin)
+            pitch_context = lib.Beatrice20rc0_CreatePitchContext1()
+            
+            waveform_generator = lib.Beatrice20rc0_CreateWaveformGenerator()
+            lib.Beatrice20rc0_ReadWaveformGeneratorParameters(waveform_generator, waveform_bin)
+            waveform_context = lib.Beatrice20rc0_CreateWaveformContext1()
+            
+            embedding_setter = lib.Beatrice20rc0_CreateEmbeddingSetter()
+            lib.Beatrice20rc0_ReadEmbeddingSetterParameters(embedding_setter, embedding_bin)
+            
+            _n_spk_val = ctypes.c_int(0)
+            lib.Beatrice20rc0_ReadNSpeakers(speaker_bin, ctypes.byref(_n_spk_val))
+            n_speakers = _n_spk_val.value if _n_spk_val.value > 0 else 101
+            print(f"[*] Speaker count from new binary: {n_speakers}")
+            
+            codebooks = (ctypes.c_float * (n_speakers * 512 * 128))()
+            additive_embeddings = (ctypes.c_float * (n_speakers * 256))()
+            formant_shift_embeddings = (ctypes.c_float * (9 * 256))()
+            kv_embeddings = (ctypes.c_float * (n_speakers * 384 * 128))()
+            
+            lib.Beatrice20rc0_ReadSpeakerEmbeddings(
+                speaker_bin,
+                ctypes.cast(codebooks, ctypes.POINTER(ctypes.c_float)),
+                ctypes.cast(additive_embeddings, ctypes.POINTER(ctypes.c_float)),
+                ctypes.cast(formant_shift_embeddings, ctypes.POINTER(ctypes.c_float)),
+                ctypes.cast(kv_embeddings, ctypes.POINTER(ctypes.c_float))
+            )
+            
+            embedding_context = lib.Beatrice20rc0_CreateEmbeddingContext()
+            
+            # Hot sync dynamic variables
+            update_target_speaker(Config.speaker_index)
+            update_formant_shift(Config.pitch_shift)
+            
+            Config.dsp_ready = True
+            print(f"[+] Hot-reload complete for: {model_dir}")
+        except Exception as e:
+            print("[-] Failed to reload new VST3 models:", e)
 
-# Load dynamic speaker embeddings from binary
-# Dynamically read how many speaker embeddings are present in the binary.
-# The file ships with 100 JVS voices (indices 0–99) plus 1 neutral embedding
-# at index 100, giving n_speakers = 101 total slots in the array layout.
-# We read this value from the binary itself rather than hard-coding it.
-_n_spk_val = ctypes.c_int(0)
-lib.Beatrice20rc0_ReadNSpeakers(speaker_bin, ctypes.byref(_n_spk_val))
-n_speakers = _n_spk_val.value if _n_spk_val.value > 0 else 101
-print(f"[*] Speaker count from binary: {n_speakers}")
-codebooks = (ctypes.c_float * (n_speakers * 512 * 128))()
-additive_embeddings = (ctypes.c_float * (n_speakers * 256))()
-formant_shift_embeddings = (ctypes.c_float * (9 * 256))()
-kv_embeddings = (ctypes.c_float * (n_speakers * 384 * 128))()
-
-print("[*] Loading speaker embeddings library...")
-lib.Beatrice20rc0_ReadSpeakerEmbeddings(
-    speaker_bin,
-    ctypes.cast(codebooks, ctypes.POINTER(ctypes.c_float)),
-    ctypes.cast(additive_embeddings, ctypes.POINTER(ctypes.c_float)),
-    ctypes.cast(formant_shift_embeddings, ctypes.POINTER(ctypes.c_float)),
-    ctypes.cast(kv_embeddings, ctypes.POINTER(ctypes.c_float))
-)
-
-embedding_context = lib.Beatrice20rc0_CreateEmbeddingContext()
 
 # Helper functions to update target speaker index and formant shift coefficients
 def update_target_speaker(speaker_id):
@@ -540,14 +601,8 @@ def update_formant_shift(formant_shift_val):
     except Exception as e:
         print("Error in update_formant_shift:", e)
 
-# Apply default speaker index 0 and default formant shift 0.0 on startup
-update_target_speaker(Config.speaker_index)
-update_formant_shift(Config.formant_shift)
-
-# Mark DSP as fully ready — the audio callback checks this flag before
-# engaging the DSP pipeline, so we never run the C models with uninitialised state.
-Config.dsp_ready = True
-print("[+] Beatrice DSP engine successfully initialized. Voice conversion is ACTIVE.")
+# Trigger first model initialization from default folder
+load_beatrice_models("models/beatrice_paraphernalia_jvs")
 
 # Persistent ctypes buffers for thread-safe real-time DSP execution to prevent real-time allocation overhead
 class DSPBuffers:
@@ -566,7 +621,8 @@ def _speaker_update_worker():
             idx = _speaker_update_queue.get()
             if idx is None:
                 break
-            update_target_speaker(idx)
+            with dsp_lock:
+                update_target_speaker(idx)
         except Exception as ex:
             print(f'[Beatrice] Speaker update worker error: {ex}')
 
@@ -594,7 +650,8 @@ def audio_callback(indata, outdata, frames, time_info, status):
     if Config.pending_formant_shift is not None:
         Config.formant_shift = Config.pending_formant_shift
         try:
-            update_formant_shift(Config.formant_shift)
+            with dsp_lock:
+                update_formant_shift(Config.formant_shift)
         except Exception:
             pass
         Config.pending_formant_shift = None
@@ -619,57 +676,61 @@ def audio_callback(indata, outdata, frames, time_info, status):
 
     # --- DSP pipeline ---
     try:
-        in_samples_c = np.ascontiguousarray(in_samples, dtype=np.float32)
-        input_ptr = in_samples_c.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+        with dsp_lock:
+            if not Config.dsp_ready:
+                return
 
-        # 1. Phone feature extraction (128 floats)
-        lib.Beatrice20rc0_ExtractPhone1(
-            phone_extractor, input_ptr, DSPBuffers.phone_features, phone_context
-        )
+            in_samples_c = np.ascontiguousarray(in_samples, dtype=np.float32)
+            input_ptr = in_samples_c.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
 
-        # 2. Pitch estimation (1 int bin + 4 pitch floats)
-        pitch_bin_val = ctypes.c_int(0)
-        lib.Beatrice20rc0_EstimatePitch1(
-            pitch_estimator, input_ptr,
-            ctypes.byref(pitch_bin_val), DSPBuffers.pitch_features, pitch_context
-        )
+            # 1. Phone feature extraction (128 floats)
+            lib.Beatrice20rc0_ExtractPhone1(
+                phone_extractor, input_ptr, DSPBuffers.phone_features, phone_context
+            )
 
-        # Optional pitch shift
-        if Config.pitch_shift != 0.0:
-            shift_factor = 2.0 ** (Config.pitch_shift / 12.0)
-            shifted = int(round(pitch_bin_val.value * shift_factor))
-            pitch_bin_val.value = max(0, min(1000, shifted))
+            # 2. Pitch estimation (1 int bin + 4 pitch floats)
+            pitch_bin_val = ctypes.c_int(0)
+            lib.Beatrice20rc0_EstimatePitch1(
+                pitch_estimator, input_ptr,
+                ctypes.byref(pitch_bin_val), DSPBuffers.pitch_features, pitch_context
+            )
 
-        # 3. Waveform synthesis (240 floats @ 24 kHz)
-        lib.Beatrice20rc0_GenerateWaveform1(
-            waveform_generator,
-            DSPBuffers.phone_features,
-            ctypes.byref(pitch_bin_val),
-            DSPBuffers.pitch_features,
-            DSPBuffers.out_samples,
-            waveform_context
-        )
+            # Optional pitch shift
+            if Config.pitch_shift != 0.0:
+                shift_factor = 2.0 ** (Config.pitch_shift / 12.0)
+                shifted = int(round(pitch_bin_val.value * shift_factor))
+                pitch_bin_val.value = max(0, min(1000, shifted))
 
-        # Read synthesised output — .copy() is critical: np.frombuffer gives a
-        # read-only view into the ctypes buffer; without copy() the interp below
-        # can reference stale data if the buffer is reused before numpy is done.
-        out_24k = np.frombuffer(DSPBuffers.out_samples, dtype=np.float32).copy()
+            # 3. Waveform synthesis (240 floats @ 24 kHz)
+            lib.Beatrice20rc0_GenerateWaveform1(
+                waveform_generator,
+                DSPBuffers.phone_features,
+                ctypes.byref(pitch_bin_val),
+                DSPBuffers.pitch_features,
+                DSPBuffers.out_samples,
+                waveform_context
+            )
 
-        # Downsample 24 kHz (240 spl) → 16 kHz (160 spl) with linear interpolation
-        out_numpy = np.interp(
-            np.linspace(0, 240, 160, endpoint=False),
-            np.arange(240),
-            out_24k
-        ).astype(np.float32) * Config.volume
+            # Read synthesised output — .copy() is critical: np.frombuffer gives a
+            # read-only view into the ctypes buffer; without copy() the interp below
+            # can reference stale data if the buffer is reused before numpy is done.
+            out_24k = np.frombuffer(DSPBuffers.out_samples, dtype=np.float32).copy()
 
-        outdata[:, 0] = out_numpy
-        Config.output_meter = float(np.max(np.abs(out_numpy)))
+            # Downsample 24 kHz (240 spl) → 16 kHz (160 spl) with linear interpolation
+            out_numpy = np.interp(
+                np.linspace(0, 240, 160, endpoint=False),
+                np.arange(240),
+                out_24k
+            ).astype(np.float32) * Config.volume
 
-        if Config.hear_yourself:
-            try:
-                monitor_queue.put_nowait(out_numpy.copy())
-            except queue.Full:
-                pass
+            outdata[:, 0] = out_numpy
+            Config.output_meter = float(np.max(np.abs(out_numpy)))
+
+            if Config.hear_yourself:
+                try:
+                    monitor_queue.put_nowait(out_numpy.copy())
+                except queue.Full:
+                    pass
 
     except Exception as exc:
         # Log the real reason for the fallback — this helps diagnose model issues

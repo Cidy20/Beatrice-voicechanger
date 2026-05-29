@@ -3,6 +3,16 @@
 const fs   = require('path');
 const fsModule = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
+const { ipcRenderer } = require('electron');
+
+const APP_ROOT = process.env.APP_ROOT || process.cwd();
+
+// 全局异常捕捉与可视化报警，加速多环境联调
+window.addEventListener('error', (event) => {
+  console.error('[Beatrice UI Error]', event.error);
+  alert('Renderer Process Error: ' + event.message + '\nFile: ' + event.filename + ':' + event.lineno);
+});
 
 // ── i18n Dictionary ──────────────────────────────────────────────────────────
 const TRANSLATIONS = {
@@ -51,10 +61,16 @@ const TRANSLATIONS = {
     all_voices_count: "{total} voices",
     empty_voices: "No voices match your search.",
     empty_voices_sub: "Try a different name or element.",
-    model_config_error: "Model config file not found. Please check beatrice_paraphernalia_jvs/",
+    model_config_error: "Model config file not found. Please check models directory.",
     no_speakers_found: "No speaker profiles found in TOML config.",
     failed_load_speakers: "Failed to load speakers: {err}",
-    ui_config: "Interface Config"
+    ui_config: "Interface Config",
+    model_config: "Voice Models",
+    upload_model_title: "Import new voice model (.zip)",
+    upload_success: "Model uploaded successfully!",
+    upload_failed: "Import failed: {err}",
+    uploading: "Importing & Unzipping model...",
+    invalid_model_zip: "Invalid model Zip. Could not find phone_extractor.bin"
   },
   zh: {
     app_title: "BEATRICE 项目 · AI 变声器",
@@ -95,16 +111,22 @@ const TRANSLATIONS = {
     buffer: "缓冲区:",
     target_voices: "变声音色列表",
     target_voices_desc: "选择一个 JVS 说话人来改变您的声音。每个说话人均对应元素周期表中的一个独特化学元素。",
-    loading_speakers: "正在加载 100 位说话人配置...",
-    search_placeholder: "通过姓名或化学元素搜索 100 种音色...",
+    loading_speakers: "正在加载音色配置...",
+    search_placeholder: "通过姓名或化学元素搜索音色...",
     voices_count: "找到 {shown} / {total} 种音色",
     all_voices_count: "共 {total} 种音色",
     empty_voices: "没有找到符合搜索条件的音色。",
     empty_voices_sub: "请尝试使用其他姓名或化学元素进行检索。",
-    model_config_error: "未找到模型配置文件。请检查 beatrice_paraphernalia_jvs/ 目录是否存在。",
+    model_config_error: "未找到模型配置文件。请检查 models 目录结构。",
     no_speakers_found: "未在 TOML 配置中找到说话人配置文件。",
     failed_load_speakers: "加载音色失败: {err}",
-    ui_config: "界面配置"
+    ui_config: "界面配置",
+    model_config: "音色模型",
+    upload_model_title: "导入新音色模型 (.zip 压缩包)",
+    upload_success: "音色模型导入成功！",
+    upload_failed: "导入失败: {err}",
+    uploading: "正在导入并解压缩模型中...",
+    invalid_model_zip: "无效的音色包。未在压缩包中检索到 phone_extractor.bin 权重文件。"
   }
 };
 
@@ -151,6 +173,9 @@ let voiceChangerBypass = false;
 let devicesLoaded      = false;
 let backendOnline      = false;
 
+let availableModels    = [];
+let activeModelDir     = 'models/beatrice_paraphernalia_jvs'; // Default model path relative to root
+
 // ── DOM References ─────────────────────────────────────────────────────────────
 const powerToggleBtn       = document.getElementById('power-toggle');
 const bypassStatusEl       = document.getElementById('bypass-status');
@@ -190,10 +215,14 @@ const streamStatusText     = document.getElementById('stream-status-text');
 const themeSelect          = document.getElementById('theme-select');
 const langSelect           = document.getElementById('lang-select');
 
+const modelsListContainer  = document.getElementById('models-list');
+const btnUploadModel       = document.getElementById('btn-upload-model');
+const modelZipInput        = document.getElementById('model-zip-input');
+
 // ── LocalStorage Speaker-Specific Memory Helper (For Local Settings) ────────────
 
 function getSpeakerLocalConfig(index) {
-  const saved = localStorage.getItem(`beatrice-speaker-config-${index}`);
+  const saved = localStorage.getItem(`beatrice-speaker-config-${activeModelDir}-${index}`);
   if (saved) {
     try {
       return JSON.parse(saved);
@@ -207,18 +236,254 @@ function getSpeakerLocalConfig(index) {
 function saveSpeakerLocalConfig(index, config) {
   const current = getSpeakerLocalConfig(index) || { pitch_shift: 0.0, formant_shift: 0.0 };
   const updated = { ...current, ...config };
-  localStorage.setItem(`beatrice-speaker-config-${index}`, JSON.stringify(updated));
+  localStorage.setItem(`beatrice-speaker-config-${activeModelDir}-${index}`, JSON.stringify(updated));
+}
+
+// ── Multi-Model Loader ─────────────────────────────────────────────────────────
+
+function scanModels() {
+  try {
+    const modelsPath = path.join(APP_ROOT, 'models');
+    if (!fsModule.existsSync(modelsPath)) {
+      fsModule.mkdirSync(modelsPath);
+    }
+    const files = fsModule.readdirSync(modelsPath);
+    availableModels = files.filter(f => {
+      const fullPath = path.join(modelsPath, f);
+      // Check if it's a directory and contains a TOML file
+      if (fsModule.statSync(fullPath).isDirectory()) {
+        const children = fsModule.readdirSync(fullPath);
+        return children.some(c => c.endsWith('.toml'));
+      }
+      return false;
+    });
+
+    renderModelsList();
+  } catch (err) {
+    console.error('[Beatrice] Error scanning models:', err);
+  }
+}
+
+function getModelImage(modelName) {
+  try {
+    const modelDir = path.join(APP_ROOT, 'models', modelName);
+    if (fsModule.existsSync(modelDir)) {
+      const files = fsModule.readdirSync(modelDir);
+      const imgFile = files.find(f => /\.(png|jpe?g|webp)$/i.test(f));
+      if (imgFile) {
+        return `models/${modelName}/${imgFile}`;
+      }
+    }
+  } catch (e) {
+    console.error('[Beatrice] Error finding model image:', e);
+  }
+  return 'models/beatrice_paraphernalia_jvs/noimage.png';
+}
+
+function renderModelsList() {
+  modelsListContainer.innerHTML = '';
+  if (availableModels.length === 0) return;
+
+  availableModels.forEach(modelName => {
+    const modelRelativePath = `models/${modelName}`;
+    const isActive = modelRelativePath === activeModelDir;
+
+    const card = document.createElement('div');
+    card.className = `model-card${isActive ? ' active' : ''}`;
+    card.setAttribute('role', 'option');
+    card.setAttribute('aria-selected', String(isActive));
+
+    const displayName = modelName.replace('beatrice_paraphernalia_', '').toUpperCase().replaceAll('_', ' ');
+    const imgSrc = getModelImage(modelName);
+
+    card.innerHTML = `
+      <div class="model-card-img-wrapper">
+        <img class="model-card-img" src="${imgSrc}" alt="${displayName}" onerror="this.src='models/beatrice_paraphernalia_jvs/noimage.png'">
+      </div>
+      <div class="model-card-name">${displayName}</div>
+    `;
+    
+    card.addEventListener('click', () => {
+      if (modelRelativePath !== activeModelDir) {
+        switchModel(modelRelativePath);
+      }
+    });
+
+    modelsListContainer.appendChild(card);
+  });
+}
+
+async function switchModel(modelPath) {
+  activeModelDir = modelPath;
+  localStorage.setItem('beatrice-active-model-dir', modelPath);
+  renderModelsList();
+
+  // Show loading
+  speakersGrid.innerHTML = `
+    <div class="loading-state" id="loading-state">
+      <div class="spinner" aria-hidden="true"></div>
+      <p data-i18n="loading_speakers">${t('loading_speakers')}</p>
+    </div>`;
+
+  // Hot Sync Python Backend Weights reload
+  setBackendConfig({ model_dir: modelPath });
+
+  // Load new speaker profile TOML configs
+  activeSpeakerIndex = 0; // Reset active speaker on model change
+  const savedIndex = localStorage.getItem(`beatrice-speaker-index-${activeModelDir}`);
+  if (savedIndex !== null) {
+    activeSpeakerIndex = parseInt(savedIndex, 10);
+  }
+
+  loadSpeakerData();
+  applyBypassUI(voiceChangerBypass);
+}
+
+// ── File Upload / ZIP Extraction with Depth Normalization ───────────────────
+
+btnUploadModel.addEventListener('click', async () => {
+  try {
+    const result = await ipcRenderer.invoke('select-model-source');
+    if (result.canceled || result.filePaths.length === 0) return;
+
+    const sourcePath = result.filePaths[0];
+    const isZip = sourcePath.toLowerCase().endsWith('.zip');
+    const modelsPath = path.join(APP_ROOT, 'models');
+    const tempUnzipPath = path.join(modelsPath, '.tmp_upload');
+
+    // Show loading
+    speakersGrid.innerHTML = `
+      <div class="loading-state">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>${t('uploading')}</p>
+      </div>`;
+
+    if (isZip) {
+      if (fsModule.existsSync(tempUnzipPath)) {
+        fsModule.rmSync(tempUnzipPath, { recursive: true, force: true });
+      }
+      fsModule.mkdirSync(tempUnzipPath);
+
+      // macOS 原生极速提取 ZIP
+      exec(`unzip -o "${sourcePath}" -d "${tempUnzipPath}"`, (err) => {
+        if (err) {
+          alert(t('upload_failed', { err: err.message }));
+          scanModels();
+          loadSpeakerData();
+          return;
+        }
+        processSelectedFolder(tempUnzipPath, path.basename(sourcePath, '.zip'), true);
+      });
+    } else {
+      // 文件夹直接拷贝（在此过程中也将自动通过 findBinDirectory 锁定含 weights 的最内层）
+      processSelectedFolder(sourcePath, path.basename(sourcePath), false);
+    }
+  } catch (err) {
+    alert(t('upload_failed', { err: err.message }));
+    scanModels();
+    loadSpeakerData();
+  }
+});
+
+// 通用的多维度模型扁平化导入策略函数
+function processSelectedFolder(sourceDir, defaultModelName, isTempFolder) {
+  const modelsPath = path.join(APP_ROOT, 'models');
+  const tempUnzipPath = path.join(modelsPath, '.tmp_upload');
+
+  try {
+    // ── 深度递归搜索权重文件直接父层 ──
+    const innerBinDir = findBinDirectory(sourceDir);
+    if (!innerBinDir) {
+      alert(t('invalid_model_zip'));
+      if (isTempFolder && fsModule.existsSync(tempUnzipPath)) {
+        fsModule.rmSync(tempUnzipPath, { recursive: true, force: true });
+      }
+      scanModels();
+      loadSpeakerData();
+      return;
+    }
+
+    const tomlFiles = fsModule.readdirSync(innerBinDir).filter(f => f.endsWith('.toml'));
+    if (tomlFiles.length === 0) {
+      alert(t('invalid_model_zip') + " (Missing .toml configuration)");
+      if (isTempFolder && fsModule.existsSync(tempUnzipPath)) {
+        fsModule.rmSync(tempUnzipPath, { recursive: true, force: true });
+      }
+      scanModels();
+      loadSpeakerData();
+      return;
+    }
+
+    const cleanModelName = defaultModelName.replace(/\s+/g, '_');
+    const targetModelFolder = path.join(modelsPath, `beatrice_paraphernalia_${cleanModelName}`);
+
+    if (fsModule.existsSync(targetModelFolder)) {
+      fsModule.rmSync(targetModelFolder, { recursive: true, force: true });
+    }
+    fsModule.mkdirSync(targetModelFolder);
+
+    // ── 仅拷贝文件，实现扁平化提取 ──
+    const filesToCopy = fsModule.readdirSync(innerBinDir);
+    filesToCopy.forEach(fileName => {
+      const src = path.join(innerBinDir, fileName);
+      const dest = path.join(targetModelFolder, fileName);
+      if (fsModule.statSync(src).isFile()) {
+        fsModule.copyFileSync(src, dest);
+      }
+    });
+
+    if (isTempFolder && fsModule.existsSync(tempUnzipPath)) {
+      fsModule.rmSync(tempUnzipPath, { recursive: true, force: true });
+    }
+
+    alert(t('upload_success'));
+    
+    scanModels();
+    switchModel(`models/beatrice_paraphernalia_${cleanModelName}`);
+  } catch (e) {
+    alert(t('upload_failed', { err: e.message }));
+    if (isTempFolder && fsModule.existsSync(tempUnzipPath)) {
+      fsModule.rmSync(tempUnzipPath, { recursive: true, force: true });
+    }
+    scanModels();
+    loadSpeakerData();
+  }
+}
+
+function findBinDirectory(dir) {
+  const files = fsModule.readdirSync(dir);
+  if (files.includes('phone_extractor.bin')) {
+    return dir;
+  }
+  for (const file of files) {
+    const fullPath = path.join(dir, file);
+    if (fsModule.statSync(fullPath).isDirectory()) {
+      const found = findBinDirectory(fullPath);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 // ── TOML Speaker Loader ───────────────────────────────────────────────────────
 
 function loadSpeakerData() {
   try {
-    const tomlPath = path.join(__dirname, 'beatrice_paraphernalia_jvs', 'beatrice_paraphernalia_jvs.toml');
-    if (!fsModule.existsSync(tomlPath)) {
-      showSpeakerError(t('model_config_error'));
+    // Locate the active model configuration relative to root
+    const paraphernalia_dir = path.join(APP_ROOT, activeModelDir);
+    if (!fsModule.existsSync(paraphernalia_dir)) {
+      showSpeakerError(t('model_config_error') + ` (未找到路径: ${paraphernalia_dir})`);
       return;
     }
+
+    const children = fsModule.readdirSync(paraphernalia_dir);
+    const tomlFile = children.find(c => c.endsWith('.toml'));
+    if (!tomlFile) {
+      showSpeakerError(t('model_config_error') + ` (未在 ${paraphernalia_dir} 下检索到 .toml 配置文件)`);
+      return;
+    }
+
+    const tomlPath = path.join(paraphernalia_dir, tomlFile);
     const tomlText = fsModule.readFileSync(tomlPath, 'utf8');
     speakerProfiles = parseTOML(tomlText);
 
@@ -426,7 +691,7 @@ function selectSpeaker(index) {
     next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
-  localStorage.setItem('beatrice-speaker-index', index);
+  localStorage.setItem(`beatrice-speaker-index-${activeModelDir}`, index);
 
   // ── Restore speaker-specific pitch & formant adjustments (Local Memory) ──
   const localConfig = getSpeakerLocalConfig(index) || { pitch_shift: 0.0, formant_shift: 0.0 };
@@ -719,6 +984,8 @@ async function pollBackendStatus() {
         monitorContainer.style.flexDirection = 'column';
         monitorContainer.setAttribute('aria-hidden', String(!status.hear_yourself));
       }
+      // ── 首次连接成功，全量将本地 LocalStorage 的控制及 DSP 状态强力热同步到后端 ──
+      loadSavedAudioAndControls();
       
       devicesLoaded = true;
     }
@@ -775,28 +1042,29 @@ function loadSavedAudioAndControls() {
     setBackendConfig({ bypass: voiceChangerBypass });
   }
 
-  // 4. Selected Speaker Index (Global Memory)
-  const savedSpeakerIndex = localStorage.getItem('beatrice-speaker-index');
+  // 4. Selected Speaker Index & Local Model parameters (Local Model Memory)
+  const savedSpeakerIndex = localStorage.getItem(`beatrice-speaker-index-${activeModelDir}`);
   if (savedSpeakerIndex !== null) {
     activeSpeakerIndex = parseInt(savedSpeakerIndex, 10);
-    
-    // ── 恢复并初始化当前激活音色的音高/共振峰局部参数 (Local Model Memory) ──
-    const localConfig = getSpeakerLocalConfig(activeSpeakerIndex) || { pitch_shift: 0.0, formant_shift: 0.0 };
-    
-    pitchSlider.value = localConfig.pitch_shift;
-    pitchValSpan.textContent = `${localConfig.pitch_shift > 0 ? '+' : ''}${localConfig.pitch_shift.toFixed(1)} st`;
-    pitchSlider.setAttribute('aria-valuenow', localConfig.pitch_shift);
-    
-    formantSlider.value = localConfig.formant_shift;
-    formantValSpan.textContent = `${localConfig.formant_shift > 0 ? '+' : ''}${localConfig.formant_shift.toFixed(1)}`;
-    formantSlider.setAttribute('aria-valuenow', localConfig.formant_shift);
-
-    setBackendConfig({ 
-      speaker_index: activeSpeakerIndex,
-      pitch_shift: localConfig.pitch_shift,
-      formant_shift: localConfig.formant_shift
-    });
+  } else {
+    activeSpeakerIndex = 0;
   }
+  
+  const localConfig = getSpeakerLocalConfig(activeSpeakerIndex) || { pitch_shift: 0.0, formant_shift: 0.0 };
+  
+  pitchSlider.value = localConfig.pitch_shift;
+  pitchValSpan.textContent = `${localConfig.pitch_shift > 0 ? '+' : ''}${localConfig.pitch_shift.toFixed(1)} st`;
+  pitchSlider.setAttribute('aria-valuenow', localConfig.pitch_shift);
+  
+  formantSlider.value = localConfig.formant_shift;
+  formantValSpan.textContent = `${localConfig.formant_shift > 0 ? '+' : ''}${localConfig.formant_shift.toFixed(1)}`;
+  formantSlider.setAttribute('aria-valuenow', localConfig.formant_shift);
+
+  setBackendConfig({ 
+    speaker_index: activeSpeakerIndex,
+    pitch_shift: localConfig.pitch_shift,
+    formant_shift: localConfig.formant_shift
+  });
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -822,6 +1090,23 @@ langSelect.addEventListener('change', () => {
   localStorage.setItem('beatrice-lang', lang);
   applyLanguage(lang);
 });
+
+// Load multi-model profiles
+let savedActiveModel = localStorage.getItem('beatrice-active-model-dir');
+if (savedActiveModel !== null) {
+  activeModelDir = savedActiveModel;
+}
+
+scanModels();
+// If the saved active model directory is no longer scanned, revert to default
+if (!availableModels.some(m => `models/${m}` === activeModelDir)) {
+  activeModelDir = 'models/beatrice_paraphernalia_jvs';
+  localStorage.setItem('beatrice-active-model-dir', activeModelDir);
+}
+renderModelsList();
+
+// Tell Python backend the initial model folder to sync VST3 weights
+setBackendConfig({ model_dir: activeModelDir });
 
 // Restore saved settings and hot-sync to python backend
 loadSavedAudioAndControls();
