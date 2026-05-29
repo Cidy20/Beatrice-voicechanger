@@ -1,6 +1,6 @@
 'use strict';
 
-const fs   = require('path'); // We'll keep fs and path imports clean
+const fs   = require('path');
 const fsModule = require('fs');
 const path = require('path');
 
@@ -53,7 +53,8 @@ const TRANSLATIONS = {
     empty_voices_sub: "Try a different name or element.",
     model_config_error: "Model config file not found. Please check beatrice_paraphernalia_jvs/",
     no_speakers_found: "No speaker profiles found in TOML config.",
-    failed_load_speakers: "Failed to load speakers: {err}"
+    failed_load_speakers: "Failed to load speakers: {err}",
+    ui_config: "Interface Config"
   },
   zh: {
     app_title: "BEATRICE 项目 · AI 变声器",
@@ -102,7 +103,8 @@ const TRANSLATIONS = {
     empty_voices_sub: "请尝试使用其他姓名或化学元素进行检索。",
     model_config_error: "未找到模型配置文件。请检查 beatrice_paraphernalia_jvs/ 目录是否存在。",
     no_speakers_found: "未在 TOML 配置中找到说话人配置文件。",
-    failed_load_speakers: "加载音色失败: {err}"
+    failed_load_speakers: "加载音色失败: {err}",
+    ui_config: "界面配置"
   }
 };
 
@@ -187,6 +189,26 @@ const streamStatusText     = document.getElementById('stream-status-text');
 
 const themeSelect          = document.getElementById('theme-select');
 const langSelect           = document.getElementById('lang-select');
+
+// ── LocalStorage Speaker-Specific Memory Helper (For Local Settings) ────────────
+
+function getSpeakerLocalConfig(index) {
+  const saved = localStorage.getItem(`beatrice-speaker-config-${index}`);
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+}
+
+function saveSpeakerLocalConfig(index, config) {
+  const current = getSpeakerLocalConfig(index) || { pitch_shift: 0.0, formant_shift: 0.0 };
+  const updated = { ...current, ...config };
+  localStorage.setItem(`beatrice-speaker-config-${index}`, JSON.stringify(updated));
+}
 
 // ── TOML Speaker Loader ───────────────────────────────────────────────────────
 
@@ -404,7 +426,25 @@ function selectSpeaker(index) {
     next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
-  setBackendConfig({ speaker_index: index });
+  localStorage.setItem('beatrice-speaker-index', index);
+
+  // ── Restore speaker-specific pitch & formant adjustments (Local Memory) ──
+  const localConfig = getSpeakerLocalConfig(index) || { pitch_shift: 0.0, formant_shift: 0.0 };
+
+  pitchSlider.value = localConfig.pitch_shift;
+  pitchValSpan.textContent = `${localConfig.pitch_shift > 0 ? '+' : ''}${localConfig.pitch_shift.toFixed(1)} st`;
+  pitchSlider.setAttribute('aria-valuenow', localConfig.pitch_shift);
+
+  formantSlider.value = localConfig.formant_shift;
+  formantValSpan.textContent = `${localConfig.formant_shift > 0 ? '+' : ''}${localConfig.formant_shift.toFixed(1)}`;
+  formantSlider.setAttribute('aria-valuenow', localConfig.formant_shift);
+
+  // Synchronise speaker selection, along with its specific pitch and formant configurations
+  setBackendConfig({ 
+    speaker_index: index,
+    pitch_shift: localConfig.pitch_shift,
+    formant_shift: localConfig.formant_shift
+  });
 }
 
 // ── Power Toggle ──────────────────────────────────────────────────────────────
@@ -412,6 +452,7 @@ function selectSpeaker(index) {
 powerToggleBtn.addEventListener('click', () => {
   voiceChangerBypass = !voiceChangerBypass;
   applyBypassUI(voiceChangerBypass);
+  localStorage.setItem('beatrice-bypass', voiceChangerBypass);
   setBackendConfig({ bypass: voiceChangerBypass });
 });
 
@@ -433,32 +474,40 @@ function applyBypassUI(bypass) {
 
 // ── Slider Bindings ───────────────────────────────────────────────────────────
 
+// 1. Noise Gate (Global Memory)
 gateSlider.addEventListener('input', () => {
   const val = parseFloat(gateSlider.value);
   gateValSpan.textContent = val.toFixed(3);
   gateSlider.setAttribute('aria-valuenow', val);
+  localStorage.setItem('beatrice-gate-threshold', val);
   setBackendConfig({ gate_threshold: val });
 });
 
+// 2. Pitch Shift (Local Model Memory)
 pitchSlider.addEventListener('input', () => {
   const val = parseFloat(pitchSlider.value);
   pitchValSpan.textContent = `${val > 0 ? '+' : ''}${val.toFixed(1)} st`;
   pitchSlider.setAttribute('aria-valuenow', val);
+  saveSpeakerLocalConfig(activeSpeakerIndex, { pitch_shift: val });
   setBackendConfig({ pitch_shift: val });
 });
 
+// 3. Formant Shift (Local Model Memory)
 formantSlider.addEventListener('input', () => {
   const val = parseFloat(formantSlider.value);
   formantValSpan.textContent = `${val > 0 ? '+' : ''}${val.toFixed(1)}`;
   formantSlider.setAttribute('aria-valuenow', val);
+  saveSpeakerLocalConfig(activeSpeakerIndex, { formant_shift: val });
   setBackendConfig({ formant_shift: val });
 });
 
+// 4. Output Volume (Global Memory)
 volumeSlider.addEventListener('input', () => {
   const val = parseFloat(volumeSlider.value);
   const pct = Math.round(val * 100);
   volumeValSpan.textContent = `${pct}%`;
   volumeSlider.setAttribute('aria-valuenow', pct);
+  localStorage.setItem('beatrice-output-volume', val);
   setBackendConfig({ volume: val });
 });
 
@@ -525,9 +574,31 @@ async function loadAudioDevices() {
       }
     });
 
-    if ([...inputDeviceSelect.options].some(o => o.value === prevIn))   inputDeviceSelect.value  = prevIn;
-    if ([...outputDeviceSelect.options].some(o => o.value === prevOut)) outputDeviceSelect.value = prevOut;
-    if ([...monitorDeviceSelect.options].some(o => o.value === prevMon)) monitorDeviceSelect.value = prevMon;
+    // ── LocalStorage Device Restoration ──
+    const savedIn = localStorage.getItem('beatrice-input-device');
+    const savedOut = localStorage.getItem('beatrice-output-device');
+    const savedMon = localStorage.getItem('beatrice-monitor-device');
+
+    if (savedIn !== null && [...inputDeviceSelect.options].some(o => o.value === savedIn)) {
+      inputDeviceSelect.value = savedIn;
+      setBackendConfig({ input_device_id: savedIn });
+    } else if ([...inputDeviceSelect.options].some(o => o.value === prevIn)) {
+      inputDeviceSelect.value  = prevIn;
+    }
+
+    if (savedOut !== null && [...outputDeviceSelect.options].some(o => o.value === savedOut)) {
+      outputDeviceSelect.value = savedOut;
+      setBackendConfig({ output_device_id: savedOut });
+    } else if ([...outputDeviceSelect.options].some(o => o.value === prevOut)) {
+      outputDeviceSelect.value = prevOut;
+    }
+
+    if (savedMon !== null && [...monitorDeviceSelect.options].some(o => o.value === savedMon)) {
+      monitorDeviceSelect.value = savedMon;
+      setBackendConfig({ monitor_device_id: savedMon });
+    } else if ([...monitorDeviceSelect.options].some(o => o.value === prevMon)) {
+      monitorDeviceSelect.value = prevMon;
+    }
   } catch {
     // Backend not yet available
   }
@@ -538,20 +609,30 @@ async function loadAudioDevices() {
   sel.addEventListener('focus', loadAudioDevices, { once: false });
 });
 
-inputDeviceSelect.addEventListener('change', () =>
-  setBackendConfig({ input_device_id: inputDeviceSelect.value }));
+inputDeviceSelect.addEventListener('change', () => {
+  const val = inputDeviceSelect.value;
+  localStorage.setItem('beatrice-input-device', val);
+  setBackendConfig({ input_device_id: val });
+});
 
-outputDeviceSelect.addEventListener('change', () =>
-  setBackendConfig({ output_device_id: outputDeviceSelect.value }));
+outputDeviceSelect.addEventListener('change', () => {
+  const val = outputDeviceSelect.value;
+  localStorage.setItem('beatrice-output-device', val);
+  setBackendConfig({ output_device_id: val });
+});
 
-monitorDeviceSelect.addEventListener('change', () =>
-  setBackendConfig({ monitor_device_id: monitorDeviceSelect.value }));
+monitorDeviceSelect.addEventListener('change', () => {
+  const val = monitorDeviceSelect.value;
+  localStorage.setItem('beatrice-monitor-device', val);
+  setBackendConfig({ monitor_device_id: val });
+});
 
 hearYourselfToggle.addEventListener('change', () => {
   const checked = hearYourselfToggle.checked;
   monitorContainer.style.display = checked ? 'flex' : 'none';
   monitorContainer.style.flexDirection = 'column';
   monitorContainer.setAttribute('aria-hidden', String(!checked));
+  localStorage.setItem('beatrice-hear-yourself', checked);
   setBackendConfig({ hear_yourself: checked });
 });
 
@@ -597,15 +678,48 @@ async function pollBackendStatus() {
     // One-time device sync on first successful poll
     if (!devicesLoaded) {
       await loadAudioDevices();
-      if (status.input_device_id   != null) inputDeviceSelect.value  = String(status.input_device_id);
-      if (status.output_device_id  != null) outputDeviceSelect.value = String(status.output_device_id);
-      if (status.monitor_device_id != null) monitorDeviceSelect.value = String(status.monitor_device_id);
-      if (typeof status.hear_yourself === 'boolean') {
+
+      // Prioritise LocalStorage. If not present, fall back to backend status
+      const savedIn = localStorage.getItem('beatrice-input-device');
+      const savedOut = localStorage.getItem('beatrice-output-device');
+      const savedMon = localStorage.getItem('beatrice-monitor-device');
+      const savedHearYourself = localStorage.getItem('beatrice-hear-yourself');
+
+      if (savedIn !== null) {
+        inputDeviceSelect.value = savedIn;
+        setBackendConfig({ input_device_id: savedIn });
+      } else if (status.input_device_id != null) {
+        inputDeviceSelect.value = String(status.input_device_id);
+      }
+
+      if (savedOut !== null) {
+        outputDeviceSelect.value = savedOut;
+        setBackendConfig({ output_device_id: savedOut });
+      } else if (status.output_device_id != null) {
+        outputDeviceSelect.value = String(status.output_device_id);
+      }
+
+      if (savedMon !== null) {
+        monitorDeviceSelect.value = savedMon;
+        setBackendConfig({ monitor_device_id: savedMon });
+      } else if (status.monitor_device_id != null) {
+        monitorDeviceSelect.value = String(status.monitor_device_id);
+      }
+
+      if (savedHearYourself !== null) {
+        const checked = savedHearYourself === 'true';
+        hearYourselfToggle.checked = checked;
+        monitorContainer.style.display = checked ? 'flex' : 'none';
+        monitorContainer.style.flexDirection = 'column';
+        monitorContainer.setAttribute('aria-hidden', String(!checked));
+        setBackendConfig({ hear_yourself: checked });
+      } else if (typeof status.hear_yourself === 'boolean') {
         hearYourselfToggle.checked = status.hear_yourself;
         monitorContainer.style.display = status.hear_yourself ? 'flex' : 'none';
         monitorContainer.style.flexDirection = 'column';
         monitorContainer.setAttribute('aria-hidden', String(!status.hear_yourself));
       }
+      
       devicesLoaded = true;
     }
 
@@ -626,6 +740,62 @@ async function pollBackendStatus() {
     }
   } catch {
     setBackendStatus(false);
+  }
+}
+
+// ── Restore Slider & Control Configurations ────────────────────────────────────
+
+function loadSavedAudioAndControls() {
+  // 1. Noise Gate (Global Memory)
+  const savedGate = localStorage.getItem('beatrice-gate-threshold');
+  if (savedGate !== null) {
+    const val = parseFloat(savedGate);
+    gateSlider.value = val;
+    gateValSpan.textContent = val.toFixed(3);
+    gateSlider.setAttribute('aria-valuenow', val);
+    setBackendConfig({ gate_threshold: val });
+  }
+
+  // 2. Volume (Global Memory)
+  const savedVolume = localStorage.getItem('beatrice-output-volume');
+  if (savedVolume !== null) {
+    const val = parseFloat(savedVolume);
+    volumeSlider.value = val;
+    const pct = Math.round(val * 100);
+    volumeValSpan.textContent = `${pct}%`;
+    volumeSlider.setAttribute('aria-valuenow', pct);
+    setBackendConfig({ volume: val });
+  }
+
+  // 3. Bypass (Global Memory)
+  const savedBypass = localStorage.getItem('beatrice-bypass');
+  if (savedBypass !== null) {
+    voiceChangerBypass = savedBypass === 'true';
+    applyBypassUI(voiceChangerBypass);
+    setBackendConfig({ bypass: voiceChangerBypass });
+  }
+
+  // 4. Selected Speaker Index (Global Memory)
+  const savedSpeakerIndex = localStorage.getItem('beatrice-speaker-index');
+  if (savedSpeakerIndex !== null) {
+    activeSpeakerIndex = parseInt(savedSpeakerIndex, 10);
+    
+    // ── 恢复并初始化当前激活音色的音高/共振峰局部参数 (Local Model Memory) ──
+    const localConfig = getSpeakerLocalConfig(activeSpeakerIndex) || { pitch_shift: 0.0, formant_shift: 0.0 };
+    
+    pitchSlider.value = localConfig.pitch_shift;
+    pitchValSpan.textContent = `${localConfig.pitch_shift > 0 ? '+' : ''}${localConfig.pitch_shift.toFixed(1)} st`;
+    pitchSlider.setAttribute('aria-valuenow', localConfig.pitch_shift);
+    
+    formantSlider.value = localConfig.formant_shift;
+    formantValSpan.textContent = `${localConfig.formant_shift > 0 ? '+' : ''}${localConfig.formant_shift.toFixed(1)}`;
+    formantSlider.setAttribute('aria-valuenow', localConfig.formant_shift);
+
+    setBackendConfig({ 
+      speaker_index: activeSpeakerIndex,
+      pitch_shift: localConfig.pitch_shift,
+      formant_shift: localConfig.formant_shift
+    });
   }
 }
 
@@ -652,6 +822,9 @@ langSelect.addEventListener('change', () => {
   localStorage.setItem('beatrice-lang', lang);
   applyLanguage(lang);
 });
+
+// Restore saved settings and hot-sync to python backend
+loadSavedAudioAndControls();
 
 loadSpeakerData();
 applyBypassUI(voiceChangerBypass);   // initialise UI to correct state
